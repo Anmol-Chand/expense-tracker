@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
     TextField,
     Typography,
@@ -20,6 +20,9 @@ import {
 } from "../../../constants/categories";
 import { useExpenseTrackerContext } from "../../../context/context";
 
+import { useSpeechContext } from "@speechly/react-client";
+import CustomizedSnackbar from "../../Snackbar/Snackbar";
+
 const initialState = {
     amount: "",
     type: "Income",
@@ -31,6 +34,9 @@ const Form = () => {
     const classes = useStyles();
     const [formData, setFormData] = useState(initialState);
     const { addTransaction } = useExpenseTrackerContext();
+    const { segment } = useSpeechContext();
+
+    const [open, setOpen] = useState(false);
 
     const handleChange = (event) => {
         const formDataItem = event.target.name;
@@ -45,15 +51,91 @@ const Form = () => {
     };
 
     const handleSubmit = (event) => {
+        if (
+            Number.isNaN(Number(formData.amount)) ||
+            !formData.date.includes("-")
+        )
+            return;
         const transaction = {
             ...formData,
             amount: Number(formData.amount),
             id: uuidv4(),
         };
 
+        setOpen(true);
         addTransaction(transaction);
         setFormData(initialState);
     };
+
+    useEffect(() => {
+        if (segment) {
+            // console.log(segment);
+            if (segment.intent.intent === "add_expense") {
+                setFormData({ ...formData, type: "Expense" });
+            } else if (segment.intent.intent === "add_income") {
+                setFormData({ ...formData, type: "Income" });
+            } else if (
+                segment.isFinal &&
+                segment.intent.intent === "create_transaction"
+            ) {
+                return handleSubmit();
+            } else if (
+                segment.isFinal &&
+                segment.intent.intent === "cancel_transaction"
+            ) {
+                setFormData(initialState);
+            }
+
+            segment.entities.forEach((e) => {
+                const category = `${e.value.charAt(0)}${e.value
+                    .slice(1)
+                    .toLowerCase()}`;
+                switch (e.type) {
+                    case "amount":
+                        setFormData({ ...formData, amount: e.value });
+                        break;
+                    case "category":
+                        if (
+                            incomeCategories
+                                .map((iC) => iC.type)
+                                .includes(category)
+                        ) {
+                            setFormData({
+                                ...formData,
+                                type: "Income",
+                                category,
+                            });
+                        } else if (
+                            expenseCategories
+                                .map((iC) => iC.type)
+                                .includes(category)
+                        ) {
+                            setFormData({
+                                ...formData,
+                                type: "Expense",
+                                category,
+                            });
+                        }
+                        break;
+                    case "date":
+                        setFormData({ ...formData, date: e.value });
+                        break;
+                    default:
+                        break;
+                }
+            });
+
+            if (
+                segment.isFinal &&
+                formData.amount &&
+                formData.category &&
+                formData.type &&
+                formData.date
+            ) {
+                handleSubmit();
+            }
+        }
+    }, [segment]);
 
     let selectedCategories =
         formData.type === "Income" ? incomeCategories : expenseCategories;
@@ -66,9 +148,10 @@ const Form = () => {
 
     return (
         <Grid container spacing={2}>
+            <CustomizedSnackbar open={open} setOpen={setOpen} />
             <Grid item xs={12}>
                 <Typography align="center" variant="subtitle2" gutterBottom>
-                    ...Speechly
+                    {segment?.words.map((w) => w.value).join(" ")}
                 </Typography>
             </Grid>
             <Grid item xs={6}>

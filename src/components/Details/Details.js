@@ -16,7 +16,7 @@ const Details = ({ title }) => {
         <Card className={classes[title.toLowerCase()]}>
             <CardHeader title={title} />
             <CardContent>
-                <Typography variant="h5">INR {total}</Typography>
+                <Typography variant="h5">$ {total}</Typography>
                 <Doughnut data={chartData} />
             </CardContent>
         </Card>
